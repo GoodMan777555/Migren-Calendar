@@ -6,32 +6,28 @@ import os
 import time
 
 # ==========================================
-# 1. НАСТРОЙКИ И КОНСТАНТЫ
+# 1. НАСТРОЙКИ
 # ==========================================
 st.set_page_config(page_title="Migraine Diary", page_icon="🧠", layout="wide")
 
 DATA_FILE = "migraine_data.csv"
 
-# Словари для перевода ЗНАЧЕНИЙ (данных внутри ячеек)
+# ==========================================
+# 2. СЛОВАРИ И ПЕРЕВОД
+# ==========================================
 VAL_MAP = {
-    # Локализация
     "Виски": "רקות", "Затылок": "עורף", "Лоб": "מצח",
     "Правая сторона": "צד ימין", "Левая сторона": "צד שמאל",
-    "Вся голова": "כל הראש", "Шея": "צוואר", "Глаза": "עיניים", 
-    "Мигрирующая": "נודד",
-    # Симптомы
+    "Вся голова": "כל הראש", "Шея": "צוואר", "Глаза": "עיניים", "Мигрирующая": "נודד",
     "Тошнота": "בחילה", "Светобоязнь": "רגישות לאור", "Звукобоязнь": "רגישות לרעש",
     "Аура": "אורה", "Головокружение": "סחרחורת", "Слабость": "חולשה", "Рвота": "הקאה",
-    # Триггеры
     "Стресс": "לחץ/סטרס", "Недосып": "חוסר שינה", "Перемена погоды": "מזג אוויר",
     "Алкоголь": "אלכוהול", "Кофеин": "קפאין", "Голод": "רעב",
     "Экран/Монитор": "מסכים", "Запахи": "ריחות", "Пропуск еды": "דילוג על ארוחה",
     "Яркий свет": "אור חזק"
 }
-# Обратный словарь (Hebrew -> Russian)
 REV_VAL_MAP = {v: k for k, v in VAL_MAP.items()}
 
-# Словари интерфейса
 LANG = {
     "Russian": {
         "dir": "ltr",
@@ -41,7 +37,7 @@ LANG = {
             "add_title": "Новая запись", "save_btn": "Сохранить", "success": "Запись сохранена!",
             "stats_title": "Аналитика", "total": "Всего", "avg": "Средняя боль", "last": "Последний раз",
             "c_cal": "Хронология", "c_loc": "Локализация", "c_trig": "Триггеры",
-            "edit_title": "Редактор", "edit_help": "Выделите строку слева и нажмите Delete для удаления.",
+            "edit_title": "Редактор", "edit_help": "Для удаления выделите строку слева и нажмите Delete.",
             "update_btn": "Обновить данные", "empty": "Нет данных"
         },
         "opts": {
@@ -58,7 +54,7 @@ LANG = {
             "add_title": "רשומה חדשה", "save_btn": "שמור רשומה", "success": "נשמר בהצלחה!",
             "stats_title": "ניתוח נתונים", "total": "סה״כ התקפים", "avg": "עוצמה ממוצעת", "last": "התקף אחרון",
             "c_cal": "לוח שנה של הכאב", "c_loc": "מיקום הכאב", "c_trig": "טריגרים נפוצים",
-            "edit_title": "ניהול רשומות", "edit_help": "כדי למחוק: סמן שורה משמאל ולחץ Delete במקלדת",
+            "edit_title": "ניהול רשומות", "edit_help": "למחיקה: סמן שורה משמאל ולחץ Delete במקלדת",
             "update_btn": "עדכן נתונים", "empty": "אין נתונים"
         },
         "opts": {
@@ -72,17 +68,14 @@ LANG = {
 SYS_COLS = LANG["Russian"]["cols"]
 
 # ==========================================
-# 2. РАБОТА С ДАННЫМИ
+# 3. ФУНКЦИИ ДАННЫХ
 # ==========================================
-
 def load_data():
     if not os.path.exists(DATA_FILE):
         return pd.DataFrame(columns=SYS_COLS)
-    
     try:
         df = pd.read_csv(DATA_FILE)
-        
-        # Лечение старых имен колонок
+        # Fix columns
         rename_map = {}
         for col in df.columns:
             if "Интенсивность" in col and col != "Интенсивность (1-10)":
@@ -90,11 +83,10 @@ def load_data():
         if rename_map:
             df.rename(columns=rename_map, inplace=True)
             df.to_csv(DATA_FILE, index=False)
-
-        # Исправление типов данных (Дата и Время)
+        
+        # Fix types
         if not df.empty:
             df['Дата'] = pd.to_datetime(df['Дата']).dt.date
-            
             def parse_time(t):
                 try:
                     return pd.to_datetime(str(t), format='%H:%M:%S').time()
@@ -103,12 +95,9 @@ def load_data():
                         return pd.to_datetime(str(t), format='%H:%M').time()
                     except:
                         return datetime.now().time()
-            
             df['Время'] = df['Время'].apply(parse_time)
-            
         return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
+    except:
         return pd.DataFrame(columns=SYS_COLS)
 
 def save_data(df):
@@ -118,65 +107,81 @@ def save_data(df):
     df_save.to_csv(DATA_FILE, index=False)
 
 # ==========================================
-# 3. ИНТЕРФЕЙС И CSS
+# 4. ИНТЕРФЕЙС И CSS (ИСПРАВЛЕНИЕ)
 # ==========================================
 
-# Сайдбар
+# Языковая панель
 st.sidebar.title("Language / שפה")
 lang_key = st.sidebar.selectbox("Select", ["Russian", "Hebrew"], label_visibility="collapsed")
 T = LANG[lang_key]
 
-# --- ИСПРАВЛЕННЫЙ CSS ДЛЯ МОБИЛЬНЫХ ---
+# --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+# Мы не меняем глобальный direction, чтобы не ломать меню.
+# Мы меняем только выравнивание текста (text-align) и внутренних элементов.
 if T["dir"] == "rtl":
     st.markdown("""
     <style>
-        /* Переключаем направление ТОЛЬКО для контента, а не для всего приложения */
-        /* Это чинит "плавающее" меню на мобильных */
+        /* Выравниваем заголовки и текст */
+        h1, h2, h3, p, label, .stMarkdown {
+            text-align: right !important;
+        }
         
-        .main .block-container {
+        /* Выравниваем содержимое инпутов */
+        .stTextInput input, .stTextArea textarea, .stNumberInput input {
+            text-align: right !important;
             direction: rtl;
-            text-align: right;
         }
         
-        section[data-testid="stSidebar"] .block-container {
-            direction: rtl;
-            text-align: right;
-        }
-
-        /* Выравнивание текстов и заголовков */
-        h1, h2, h3, p, div, label, .stMarkdown, .stRadio {
-            text-align: right;
-        }
-        
-        /* Кнопки справа */
-        div.stButton > button {
-            float: right;
-        }
-        
-        /* Исправление цифр в метриках (чтобы не зеркалились) */
-        div[data-testid="stMetricValue"] {
-            direction: ltr;
-            text-align: right;
-        }
-        
-        /* Исправление выпадающих списков */
+        /* Выравниваем выпадающие списки */
         div[data-baseweb="select"] {
             direction: rtl;
+        }
+        
+        /* Выравниваем мультиселекты */
+        .stMultiSelect {
+            direction: rtl;
+        }
+        
+        /* Выравниваем кнопки (сдвигаем вправо) */
+        div.stButton {
+            display: flex;
+            flex-direction: row-reverse;
+        }
+        
+        /* Метрики */
+        div[data-testid="stMetricValue"] {
+            text-align: right;
+        }
+        
+        /* Боковая панель: текст справа, но само меню работает стандартно */
+        section[data-testid="stSidebar"] {
+            text-align: right;
+        }
+        
+        /* Исправление для radio buttons в сайдбаре */
+        .stRadio div[role="radiogroup"] {
+            align-items: flex-end;
         }
     </style>
     """, unsafe_allow_html=True)
 
+# Навигация
 st.sidebar.title(T["ui"]["menu_add"] if lang_key=="Russian" else "תפריט")
 page = st.sidebar.radio("Nav", [T["ui"]["menu_add"], T["ui"]["menu_stats"], T["ui"]["menu_edit"]], label_visibility="collapsed")
 
-# ------------------------------------------
+# ==========================================
 # СТРАНИЦА: ДОБАВИТЬ
-# ------------------------------------------
+# ==========================================
 if page == T["ui"]["menu_add"]:
     st.title(T["ui"]["add_title"])
     
     with st.form("add_form", clear_on_submit=True):
-        c1, c2 = st.columns(2)
+        # Меняем порядок колонок визуально для иврита
+        if lang_key == "Hebrew":
+            c2, c1 = st.columns(2)
+        else:
+            c1, c2 = st.columns(2)
+            
         with c1:
             date_in = st.date_input(T["cols"][0], datetime.now())
             time_in = st.time_input(T["cols"][1], datetime.now())
@@ -191,6 +196,7 @@ if page == T["ui"]["menu_add"]:
         submitted = st.form_submit_button(T["ui"]["save_btn"])
 
         if submitted:
+            # Save Logic
             loc_db = REV_VAL_MAP.get(loc_in, loc_in)
             sym_db = ", ".join([REV_VAL_MAP.get(x, x) for x in sym_in])
             trig_db = ", ".join([REV_VAL_MAP.get(x, x) for x in trig_in])
@@ -212,9 +218,9 @@ if page == T["ui"]["menu_add"]:
             st.balloons()
             st.success(T["ui"]["success"])
 
-# ------------------------------------------
+# ==========================================
 # СТРАНИЦА: СТАТИСТИКА
-# ------------------------------------------
+# ==========================================
 elif page == T["ui"]["menu_stats"]:
     st.title(T["ui"]["stats_title"])
     df = load_data()
@@ -222,10 +228,18 @@ elif page == T["ui"]["menu_stats"]:
     if df.empty:
         st.info(T["ui"]["empty"])
     else:
-        c1, c2, c3 = st.columns(3)
-        c1.metric(T["ui"]["total"], len(df))
-        c2.metric(T["ui"]["avg"], f"{df[SYS_COLS[2]].mean():.1f}")
-        c3.metric(T["ui"]["last"], str(df[SYS_COLS[0]].max()))
+        # Metrics
+        m1, m2, m3 = st.columns(3)
+        # Если иврит, отобразим метрики справа налево визуально
+        if lang_key == "Hebrew":
+             m3.metric(T["ui"]["total"], len(df))
+             m2.metric(T["ui"]["avg"], f"{df[SYS_COLS[2]].mean():.1f}")
+             m1.metric(T["ui"]["last"], str(df[SYS_COLS[0]].max()))
+        else:
+             m1.metric(T["ui"]["total"], len(df))
+             m2.metric(T["ui"]["avg"], f"{df[SYS_COLS[2]].mean():.1f}")
+             m3.metric(T["ui"]["last"], str(df[SYS_COLS[0]].max()))
+             
         st.markdown("---")
 
         df_viz = df.copy()
@@ -256,9 +270,9 @@ elif page == T["ui"]["menu_stats"]:
             else:
                 st.write(T["ui"]["empty"])
 
-# ------------------------------------------
+# ==========================================
 # СТРАНИЦА: РЕДАКТОР
-# ------------------------------------------
+# ==========================================
 elif page == T["ui"]["menu_edit"]:
     st.title(T["ui"]["edit_title"])
     st.info(T["ui"]["edit_help"])
